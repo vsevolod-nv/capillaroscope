@@ -1,0 +1,41 @@
+@startuml capillaroscope-container
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+
+title C4 Container diagram: Capillaroscope
+
+Person(user, "User", "Проводит исследование и просматривает результаты.")
+
+System_Boundary(app, "App") {
+    Container(ui, "UI", "Desktop GUI", "Показывает видеопоток, настройки съемки и результаты исследования.")
+    Container(application, "Application", "Координирует сценарии исследования, команды устройству, обработку изображений и сохранение данных.")
+    Container(hardware_adapter, "Hardware adapter", "Работает с камерой и микроконтроллером через общие интерфейсы.")
+    Container(processing, "Processing", "Обрабатывает изображения и формирует результаты анализа.")
+    ContainerDb(storage, "Storage", "Postgres/etc", "Хранит снимки, видео, настройки и результаты исследований.")
+    Container(mock_microcontroller, "Mock Microcontroller", "Управляет камерой и подсветкой")
+}
+
+
+System_Ext(device, "Device", "Подсветка капилляроскопа")
+System_Ext(camera, "Camera", "Камера")
+
+Rel(user, ui, "Работает с интерфейсом")
+Rel(ui, application, "Передает действия пользователя")
+Rel(application, ui, "Возвращает состояние, изображения и результаты")
+
+Rel(application, processing, "Передает изображения на обработку")
+Rel(processing, application, "Возвращает результаты анализа")
+
+Rel(application, storage, "Сохраняет и загружает данные")
+Rel(storage, application, "Отправляет данные application, в том числе для анализа в processing")
+
+Rel(application, hardware_adapter, "Отправляет команды съемки, фокуса и подсветки")
+Rel(hardware_adapter, application, "Возвращает изображения, статус и ошибки")
+Rel(hardware_adapter, mock_microcontroller, "Передает команды и получает статусы")
+Rel(mock_microcontroller, device, "Управляет светодиодом")
+Rel(device, mock_microcontroller, "Передает состояние устройства")
+Rel(mock_microcontroller, camera, "Управляет камерой")
+Rel(camera, mock_microcontroller, "Передает состояние камеры и видеоизображение")
+
+@enduml

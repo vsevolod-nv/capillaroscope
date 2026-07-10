@@ -1,0 +1,33 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+
+title C4 Component diagram: Application
+
+Container(ui, "UI", "Desktop GUI", "Показывает интерфейс и передает действия пользователя.")
+Container(hardware_adapter, "Hardware adapter", "Python package", "Работает с камерой и микроконтроллером через общие интерфейсы.")
+Container(processing, "Processing", "Python package", "Обрабатывает изображения и формирует результаты анализа.")
+ContainerDb(storage, "Storage", "Postgres/etc", "Хранит метаданные, снимки, настройки и результаты исследований.")
+
+Container_Boundary(application, "Application") {
+    Component(device_controller, "Device controller", "Python", "Управляет подключением устройства, подсветкой, фокусом и статусами.")
+    Component(camera_controller, "Camera controller", "Python", "Управляет камерой, настройками съемки и получением кадров.")
+    Component(preview_service, "Preview service", "Python", "Организует поток предпросмотра для UI.")
+    Component(measurement_service, "Measurement service", "Python", "Запускает исследование и собирает пары кадров для разных каналов подсветки.")
+}
+
+Rel(ui, preview_service, "Запускает и останавливает предпросмотр")
+Rel(ui, measurement_service, "Запускает исследование")
+Rel(ui, device_controller, "Меняет параметры подсветки и фокуса")
+Rel(ui, camera_controller, "Меняет параметры камеры")
+
+Rel(preview_service, camera_controller, "Запрашивает кадры предпросмотра")
+Rel(measurement_service, device_controller, "Управляет подсветкой и фокусом")
+Rel(measurement_service, camera_controller, "Получает кадры исследования")
+
+Rel(device_controller, hardware_adapter, "Отправляет команды устройству")
+Rel(camera_controller, hardware_adapter, "Управляет камерой и получает кадры")
+Rel(measurement_service, processing, "Запускает обработку изображений")
+Rel(measurement_service, storage, "Сохраняет измерения и исходные кадры")
+@enduml

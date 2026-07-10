@@ -1,0 +1,23 @@
+@startuml capillaroscope-context
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+LAYOUT_WITH_LEGEND()
+
+title C4 Context diagram: Capillaroscope
+
+Person(user, "User")
+
+System(app, "App", "Приложение для получения изображений с камеры, анализ изображений, контроль светодиодов, сохранение данных в storage")
+
+
+System_Ext(mock_microcontroller, "Mock_microcontroller", "Камера+подсветка")
+System_Ext(storage, "Storage", "Хранит снимки, видео и результаты исследований.")
+
+Rel(user, app,)
+
+Rel(app, mock_microcontroller, "")
+Rel(mock_microcontroller, app, "")
+Rel(app, storage, "Сохраняет результаты исследований")
+Rel(storage, app, "Возвращает сохраненные данные")
+
+@enduml

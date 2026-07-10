@@ -1,0 +1,36 @@
+@startuml capillaroscope-hardware-adapter-component
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+
+title C4 Component diagram: Hardware adapter
+
+Container(application, "Application", "Координирует сценарии исследования и команды устройству.")
+Container(mock_microcontroller, "Mock Microcontroller", "Управляет камерой и подсветкой.")
+System_Ext(device, "Device", "Подсветка капилляроскопа.")
+System_Ext(camera, "Camera", "Камера.")
+
+Container_Boundary(hardware_adapter, "Hardware adapter") {
+    Component(camera_base, "CameraBase", "Interface", "Описывает общий интерфейс работы с камерой.")
+    Component(vendor_camera, "VendorCamera", "Python", "Работает с реальной камерой через библиотеку производителя.")
+    Component(mock_camera, "MockCamera", "Python", "Имитирует камеру во время разработки.")
+
+    Component(capillaroscope_device_base, "CapillaroscopeDeviceBase", "Interface", "Описывает общий интерфейс работы с устройством капилляроскопа.")
+    Component(serial_capillaroscope_device, "SerialCapillaroscopeDevice", "Python", "Обменивается командами и статусами с микроконтроллером.")
+    Component(mock_device, "MockDevice", "Python", "Имитирует устройство капилляроскопа во время разработки.")
+}
+
+Rel(application, camera_base, "Управляет камерой и получает кадры")
+Rel(application, capillaroscope_device_base, "Управляет подсветкой, фокусом и статусом устройства")
+
+Rel(vendor_camera, camera_base, "Реализует")
+Rel(mock_camera, camera_base, "Реализует")
+Rel(serial_capillaroscope_device, capillaroscope_device_base, "Реализует")
+Rel(mock_device, capillaroscope_device_base, "Реализует")
+
+Rel(vendor_camera, camera, "Получает изображение и статус камеры")
+Rel(serial_capillaroscope_device, mock_microcontroller, "Передает команды и получает статусы")
+Rel(mock_microcontroller, device, "Управляет светодиодом")
+Rel(mock_microcontroller, camera, "Управляет камерой")
+
+@enduml
