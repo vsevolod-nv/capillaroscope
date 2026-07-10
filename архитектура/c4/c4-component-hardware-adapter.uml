@@ -11,24 +11,26 @@ System_Ext(device, "Device", "Подсветка капилляроскопа.")
 System_Ext(camera, "Camera", "Камера.")
 
 Container_Boundary(hardware_adapter, "Hardware adapter") {
-    Component(camera_base, "CameraBase", "Interface", "Описывает общий интерфейс работы с камерой.")
-    Component(vendor_camera, "VendorCamera", "Python", "Работает с реальной камерой через библиотеку производителя.")
+    Component(camera_base, "CameraBase", "Interface", "Описывает общий интерфейс работы с камерой, включает в себя cfg.")
+    Component(mindvision, "MindVision", "Python", "Модуль реальной камеры")
     Component(mock_camera, "MockCamera", "Python", "Имитирует камеру во время разработки.")
 
-    Component(capillaroscope_device_base, "CapillaroscopeDeviceBase", "Interface", "Описывает общий интерфейс работы с устройством капилляроскопа.")
-    Component(serial_capillaroscope_device, "SerialCapillaroscopeDevice", "Python", "Обменивается командами и статусами с микроконтроллером.")
-    Component(mock_device, "MockDevice", "Python", "Имитирует устройство капилляроскопа во время разработки.")
+    Component(device_base, "DeviceBase", "Interface", "Описывает общий интерфейс работы платы со светодидоами.")
+    Component(serial_capillaroscope_device, "Device", "Python", "Модуль платы со светодиодами")
+    Component(mock_device, "MockDevice", "Python", "Имитирует микроконтрллер")
 }
 
-Rel(application, camera_base, "Управляет камерой и получает кадры")
-Rel(application, capillaroscope_device_base, "Управляет подсветкой, фокусом и статусом устройства")
+Rel(application, camera_base, "Запрос")
+Rel(camera_base, application, "Управляет камерой и получает кадры")
+Rel(application, device_base, "Запрос")
+Rel(device_base, application, "Управляет подсветкой и передаёт статус подсветки")
 
-Rel(vendor_camera, camera_base, "Реализует")
+Rel(mindvision, camera_base, "Реализует")
 Rel(mock_camera, camera_base, "Реализует")
-Rel(serial_capillaroscope_device, capillaroscope_device_base, "Реализует")
-Rel(mock_device, capillaroscope_device_base, "Реализует")
+Rel(serial_capillaroscope_device, device_base, "Реализует")
+Rel(mock_device, device_base, "Реализует")
 
-Rel(vendor_camera, camera, "Получает изображение и статус камеры")
+Rel(mindvision, camera, "Получает изображение и статус камеры")
 Rel(serial_capillaroscope_device, mock_microcontroller, "Передает команды и получает статусы")
 Rel(mock_microcontroller, device, "Управляет светодиодом")
 Rel(mock_microcontroller, camera, "Управляет камерой")
