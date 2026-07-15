@@ -203,6 +203,11 @@ cython_debug/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
 
+# Local vendor SDK files
+CameraSDK/
+CameraSDK*.tar.gz
+vendor/mindvision/
+
 # Ruff stuff:
 .ruff_cache/
 

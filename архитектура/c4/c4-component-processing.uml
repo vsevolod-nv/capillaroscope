@@ -1,0 +1,32 @@
+@startuml capillaroscope-processing-component
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+
+title C4 Component diagram: Processing
+
+Container(application, "Application", "Python", "Координирует сценарии исследования и запускает анализ сохраненного медиа.")
+ContainerDb(metadata_db, "Metadata DB", "PostgreSQL / SQLite", "Хранит media records, статусы анализа, метрики и ссылки на артефакты.")
+Container(file_storage, "File Storage", "Filesystem / NAS", "Хранит исходные видео/фото, выбранные кадры, маски и overlay.")
+
+Container_Boundary(processing, "Processing") {
+    Component(media_loader, "Media loader", "OpenCV / ffmpeg", "Открывает сохраненное видео/фото по пути из media record.")
+    Component(frame_selector, "Frame selector", "Python / OpenCV", "Выделяет кадры, подходящие для анализа.")
+    Component(image_quality, "Image quality", "Python / OpenCV", "Оценивает резкость, шум, смаз, пересвет и пригодность кадров.")
+    Component(vessel_segmentation, "Vessel segmentation", "Python / OpenCV / ML", "Выделяет сосуды и капилляры на выбранных кадрах.")
+    Component(oximetry, "Oximetry", "Python / NumPy / ML", "Считает карту оксигенации и агрегированные метрики.")
+    Component(result_builder, "Processing result builder", "Python", "Формирует ProcessingResult, warnings и список артефактов.")
+}
+
+Rel(application, media_loader, "Запускает анализ по media_id/path")
+Rel(media_loader, file_storage, "Читает исходное видео/фото")
+Rel(media_loader, frame_selector, "Передает кадры")
+Rel(frame_selector, image_quality, "Передает выбранные кадры")
+Rel(image_quality, vessel_segmentation, "Передает качественные кадры")
+Rel(vessel_segmentation, oximetry, "Передает маски сосудов и кадры")
+Rel(oximetry, result_builder, "Передает карту оксигенации и метрики")
+Rel(result_builder, file_storage, "Сохраняет выбранные кадры, маски и overlay")
+Rel(result_builder, application, "Возвращает результаты и пути к артефактам")
+Rel(application, metadata_db, "Сохраняет результаты анализа и ссылки на артефакты")
+
+@enduml
