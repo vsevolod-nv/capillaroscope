@@ -1,0 +1,43 @@
+@startuml capillaroscope-container
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+
+title C4 Container diagram: Capillaroscope
+
+Person(user, "User", "Проводит исследование и просматривает результаты.")
+
+System_Boundary(app, "App") {
+    Container(ui, "UI", "Desktop GUI", "Показывает видеопоток, настройки съемки и результаты исследования.")
+    Container(application, "Application", "Python", "Координирует сценарии исследования, команды устройству, сохранение медиа и запуск анализа.")
+    Container(hardware_adapter, "Hardware adapter", "Python package", "Работает с камерой и микроконтроллером через общие интерфейсы.")
+    Container(processing, "Processing", "Python / OpenCV / NumPy", "Обрабатывает уже сохраненные видео/фото и формирует результаты анализа.")
+    ContainerDb(metadata_db, "Metadata DB", "PostgreSQL / SQLite", "Хранит пациентов, диагнозы, приемы, media_id, пути к файлам, метаданные и результаты.")
+    Container(file_storage, "File Storage", "Filesystem / NAS", "Хранит тяжелые файлы: видео, фото, выбранные кадры, маски и overlay.")
+    Container(mock_microcontroller, "Mock Microcontroller", "Python / simulator", "Имитирует микроконтроллер, камеру и подсветку во время разработки.")
+}
+
+
+System_Ext(device, "Device", "Подсветка капилляроскопа")
+System_Ext(camera, "Camera", "Камера")
+
+Rel(user, ui, "Работает с интерфейсом")
+Rel(ui, application, "Передает действия пользователя")
+Rel(application, ui, "Возвращает состояние, изображения и результаты")
+
+Rel(application, processing, "Запускает анализ сохраненного media_id/path")
+Rel(processing, application, "Возвращает результаты анализа и пути к артефактам")
+
+Rel(application, metadata_db, "Создает и читает пациентов, сессии, media records; сохраняет ссылки, статусы и метрики")
+Rel(application, file_storage, "Сначала сохраняет исходные видео/фото; загружает файлы для просмотра")
+Rel(processing, file_storage, "Читает сохраненные видео/фото; сохраняет выбранные кадры, маски и overlay")
+
+Rel(application, hardware_adapter, "Отправляет команды съемки, фокуса и подсветки")
+Rel(hardware_adapter, application, "Возвращает изображения, статус и ошибки")
+Rel(hardware_adapter, mock_microcontroller, "Передает команды и получает статусы")
+Rel(mock_microcontroller, device, "Управляет светодиодом")
+Rel(device, mock_microcontroller, "Передает состояние устройства")
+Rel(mock_microcontroller, camera, "Управляет камерой")
+Rel(camera, mock_microcontroller, "Передает состояние камеры и видеоизображение")
+
+@enduml

@@ -1,0 +1,24 @@
+@startuml capillaroscope-context
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+LAYOUT_WITH_LEGEND()
+
+title C4 Context diagram: Capillaroscope
+
+Person(user, "User", "Проводит исследование и просматривает результаты.")
+
+System(app, "App", "Приложение для управления капилляроскопом, сохранения видео/фото и анализа сохраненных данных.")
+
+
+System_Ext(capillaroscope, "Capillaroscope device", "Камера, подсветка, фокусировка и микроконтроллер.")
+System_Ext(metadata_db, "Metadata DB", "Пациенты, диагнозы, приемы, media records, статусы и результаты.")
+System_Ext(file_storage, "File Storage", "Видео, фото, выбранные кадры, маски и overlay.")
+
+Rel(user, app, "Работает через desktop UI")
+
+Rel(app, capillaroscope, "Управляет съемкой, подсветкой и фокусом")
+Rel(capillaroscope, app, "Возвращает видеопоток, кадры, статусы и ошибки")
+Rel(app, file_storage, "Сохраняет raw video/photo и артефакты анализа")
+Rel(app, metadata_db, "Сохраняет и читает пациентов, сессии, пути к файлам и результаты")
+
+@enduml
