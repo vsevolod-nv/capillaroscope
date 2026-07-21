@@ -208,6 +208,14 @@ CameraSDK/
 CameraSDK*.tar.gz
 vendor/mindvision/
 
+# Local medical and mock media
+media/mock_camera/photos/*
+media/captures/photos/*
+media/captures/videos/*
+media/processed/frames/*
+media/processed/masks/*
+media/processed/overlays/*
+
 # Ruff stuff:
 .ruff_cache/
 

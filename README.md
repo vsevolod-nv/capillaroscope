@@ -40,6 +40,19 @@ available. If the SDK is missing, the app displays a mock preview automatically.
 OpenCV is not used in `auto` mode to avoid accidentally showing a laptop webcam
 instead of the industrial MindVision camera.
 
+## Media storage
+
+Local media is stored in `media/`:
+
+- `media/mock_camera/photos` - source images for the mock camera. Put at least
+  one JPEG, PNG, or BMP image here; when MindVision is unavailable, the mock
+  camera displays the first image in this directory as a static preview.
+- `media/captures/photos` - photos captured from a real camera.
+- `media/captures/videos` - videos captured from a real camera.
+- `media/processed/{frames,masks,overlays}` - derived processing results.
+
+Media files are ignored by Git to avoid committing local or sensitive data.
+
 ## MindVision SDK
 
 For the `MV-SUA501GM-T1V-C` camera, the app looks for MindVision SDK files in:

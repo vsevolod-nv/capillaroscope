@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from capillaroscope_app.domain.models import CameraStatus, Frame
 from capillaroscope_app.hardware.camera_base import CameraBase
 

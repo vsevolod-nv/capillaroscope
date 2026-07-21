@@ -5,11 +5,10 @@ import os
 from capillaroscope_app.hardware.camera_base import CameraBase, CameraError
 from capillaroscope_app.hardware.mindvision_camera import MindVisionCamera
 from capillaroscope_app.hardware.mock_camera import MockCamera
-from capillaroscope_app.hardware.opencv_camera import OpenCVCamera
 
 
 def create_preview_camera() -> CameraBase:
-    requested = os.getenv("CAPILLAROSCOPE_CAMERA", "auto").lower()
+    requested = 'mindvision' #os.environ.get("CAPILLAROSCOPE_CAMERA", "auto").lower()
     if requested == "mock":
         camera = MockCamera("Mock camera forced by CAPILLAROSCOPE_CAMERA=mock")
         camera.connect()
@@ -21,7 +20,7 @@ def create_preview_camera() -> CameraBase:
     if requested in {"auto", "mindvision"}:
         candidates.append(MindVisionCamera())
     if requested == "opencv":
-        candidates.append(OpenCVCamera(index=0))
+        pass
 
     for candidate in candidates:
         try:

@@ -1,26 +1,31 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 
+import cv2
 import numpy as np
 
 from capillaroscope_app.domain.models import CameraStatus, Frame
-from capillaroscope_app.hardware.camera_base import CameraBase
+from capillaroscope_app.hardware.camera_base import CameraBase, CameraConnectionError
+
+MOCK_PHOTOS_DIR = (
+    Path(__file__).resolve().parents[2] / "media" / "mock_camera" / "photos"
+)
+PREVIEW_IMAGE_EXTENSIONS = frozenset({".bmp", ".jpeg", ".jpg", ".png"})
 
 
 class MockCamera(CameraBase):
     def __init__(
         self,
         reason: str = "Real camera is not available",
-        width: int = 960,
-        height: int = 720,
+        preview_image_path: Path | None = None,
     ) -> None:
         self._reason = reason
-        self._width = width
-        self._height = height
         self._connected = False
         self._preview_active = False
-        self._frame = self._build_frame()
+        self._preview_image_path = preview_image_path or self._find_preview_image()
+        self._frame = self._load_preview_frame()
 
     def connect(self) -> None:
         self._connected = True
@@ -44,7 +49,11 @@ class MockCamera(CameraBase):
             image=self._frame.copy(),
             timestamp=datetime.now(timezone.utc),
             camera_name="Mock Camera",
-            metadata={"reason": self._reason},
+            metadata={
+                "reason": self._reason,
+                "source": "static-image",
+                "image_path": str(self._preview_image_path),
+            },
         )
 
     def get_status(self) -> CameraStatus:
@@ -57,58 +66,34 @@ class MockCamera(CameraBase):
             is_mock=True,
         )
 
-    def _build_frame(self) -> np.ndarray:
-        y, x = np.mgrid[0 : self._height, 0 : self._width]
-        cx = self._width / 2
-        cy = self._height / 2
-        distance = np.sqrt((x - cx) ** 2 + (y - cy) ** 2)
-        vignette = np.clip(255 - distance * 0.35, 35, 255).astype(np.uint8)
+    def _find_preview_image(self) -> Path | None:
+        if not MOCK_PHOTOS_DIR.is_dir():
+            return None
 
-        image = np.zeros((self._height, self._width, 3), dtype=np.uint8)
-        image[..., 0] = vignette
-        image[..., 1] = np.clip(vignette * 0.92, 0, 255).astype(np.uint8)
-        image[..., 2] = np.clip(vignette * 0.82, 0, 255).astype(np.uint8)
+        for path in sorted(MOCK_PHOTOS_DIR.iterdir()):
+            if path.is_file() and path.suffix.lower() in PREVIEW_IMAGE_EXTENSIONS:
+                return path
+        return None
 
-        grid = ((x // 48) + (y // 48)) % 2 == 0
-        image[grid] = np.clip(image[grid] + 18, 0, 255)
-
-        self._draw_reticle(image)
-        self._draw_label(image)
-        return image
-
-    def _draw_reticle(self, image: np.ndarray) -> None:
-        center_y = self._height // 2
-        center_x = self._width // 2
-        color = np.array([30, 220, 170], dtype=np.uint8)
-        image[center_y - 1 : center_y + 2, center_x - 160 : center_x + 160] = color
-        image[center_y - 120 : center_y + 120, center_x - 1 : center_x + 2] = color
-        radius = 145
-        y, x = np.ogrid[: self._height, : self._width]
-        ring = np.abs((x - center_x) ** 2 + (y - center_y) ** 2 - radius**2) < 600
-        image[ring] = color
-
-    def _draw_label(self, image: np.ndarray) -> None:
-        # A compact block label avoids depending on font rendering packages.
-        top = 26
-        left = 28
-        image[top : top + 78, left : left + 360] = np.array(
-            [18, 25, 33],
-            dtype=np.uint8,
-        )
-        image[top + 8 : top + 70, left + 8 : left + 352] = np.array(
-            [45, 60, 74], dtype=np.uint8
-        )
-
-        stripes = [
-            (18, 22, 260),
-            (34, 22, 190),
-            (50, 22, 315),
-        ]
-        for row, col, width in stripes:
-            image[
-                top + row : top + row + 7,
-                left + col : left + col + width,
-            ] = np.array(
-                [220, 235, 245],
-                dtype=np.uint8,
+    def _load_preview_frame(self) -> np.ndarray:
+        if self._preview_image_path is None:
+            raise CameraConnectionError(
+                f"No mock preview image found in {MOCK_PHOTOS_DIR}"
             )
+
+        image = self._read_image(self._preview_image_path)
+        if image is None:
+            raise CameraConnectionError(
+                f"Could not read mock preview image: {self._preview_image_path}"
+            )
+        return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+    def _read_image(self, image_path: Path) -> np.ndarray | None:
+        """Read an image without OpenCV's Windows Unicode-path limitation."""
+        try:
+            encoded_image = np.fromfile(image_path, dtype=np.uint8)
+            if encoded_image.size == 0:
+                return None
+            return cv2.imdecode(encoded_image, cv2.IMREAD_COLOR)
+        except (OSError, cv2.error):
+            return None

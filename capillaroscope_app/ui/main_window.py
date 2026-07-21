@@ -26,7 +26,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Capillaroscope Preview")
         self._preview_service = PreviewService(camera)
         self._timer = QTimer(self)
-        self._timer.setInterval(33)
+        self._timer.setInterval(33) # туду: перенести в отдельный конфиг
         self._timer.timeout.connect(self._update_frame)
 
         self._preview_label = QLabel()
@@ -36,10 +36,7 @@ class MainWindow(QMainWindow):
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Expanding,
         )
-        self._preview_label.setStyleSheet(
-            "QLabel { background: #101820; border: 1px solid #26323d; }"
-        )
-
+       
         self._status_label = QLabel()
         self._status_label.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
@@ -56,7 +53,7 @@ class MainWindow(QMainWindow):
         controls.addWidget(self._restart_button)
         controls.addWidget(self._pause_button)
         controls.addStretch(1)
-
+        
         layout = QVBoxLayout()
         layout.addWidget(self._preview_label, 1)
         layout.addWidget(self._status_label)
@@ -68,11 +65,6 @@ class MainWindow(QMainWindow):
 
         self._update_status()
         self._timer.start()
-
-    def closeEvent(self, event) -> None:  # noqa: N802
-        self._timer.stop()
-        self._preview_service.stop()
-        event.accept()
 
     def _update_frame(self) -> None:
         try:
