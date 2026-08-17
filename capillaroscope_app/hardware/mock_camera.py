@@ -97,3 +97,15 @@ class MockCamera(CameraBase):
             return cv2.imdecode(encoded_image, cv2.IMREAD_COLOR)
         except (OSError, cv2.error):
             return None
+
+    def set_auto_exposure(self, enabled: bool) -> None:
+        pass
+
+    def set_exposure_ms(self, exposure_ms: float) -> None:
+        pass
+
+    def get_exposure_ms(self) -> float | None:
+        return 10.0
+
+    def get_exposure_range_ms(self) -> tuple[float, float, float]:
+        return (0.1, 100.0, 0.1)

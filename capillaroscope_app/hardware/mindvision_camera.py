@@ -202,3 +202,38 @@ class MindVisionCamera(CameraBase):
         if friendly_name:
             return str(friendly_name)
         return "MindVision MV-SUA501GM"
+
+    def set_auto_exposure(self, enabled: bool) -> None:
+        if self._handle is None:
+            self.connect()
+        if self._sdk is None or self._handle is None:
+            raise CameraConnectionError("MindVision camera is not initialized")
+
+        err = self._sdk.CameraSetAeState(self._handle, 1 if enabled else 0)
+        if err != self._sdk.CAMERA_STATUS_SUCCESS:
+            message = self._sdk.CameraGetErrorString(err)
+            raise CameraCaptureError(f"Could not set auto exposure: {message}")
+
+    def set_exposure_ms(self, exposure_ms: float) -> None:
+        if self._handle is None:
+            self.connect()
+        if self._sdk is None or self._handle is None:
+            raise CameraConnectionError("MindVision camera is not initialized")
+
+        self.set_auto_exposure(False)
+        err = self._sdk.CameraSetExposureTime(self._handle, exposure_ms * 1000.0)
+        if err != self._sdk.CAMERA_STATUS_SUCCESS:
+            message = self._sdk.CameraGetErrorString(err)
+            raise CameraCaptureError(f"Could not set exposure: {message}")
+
+    def get_exposure_ms(self) -> float | None:
+        if self._sdk is None or self._handle is None:
+            return None
+        return self._sdk.CameraGetExposureTime(self._handle) / 1000.0
+
+    def get_exposure_range_ms(self) -> tuple[float, float, float]:
+        if self._sdk is None or self._handle is None:
+            return (0.1, 100.0, 0.1)
+
+        min_us, max_us, step_us = self._sdk.CameraGetExposureTimeRange(self._handle)
+        return (min_us / 1000.0, max_us / 1000.0, step_us / 1000.0)

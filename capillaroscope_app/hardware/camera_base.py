@@ -39,3 +39,19 @@ class CameraBase(ABC):
     @abstractmethod
     def get_status(self) -> CameraStatus:
         """Return current camera status."""
+
+    @abstractmethod
+    def set_auto_exposure(self, enabled: bool) -> None:
+        """Enable or disable camera auto exposure."""
+
+    @abstractmethod
+    def set_exposure_ms(self, exposure_ms: float) -> None:
+        """Set manual exposure in milliseconds."""
+
+    @abstractmethod
+    def get_exposure_ms(self) -> float | None:
+        """Return current exposure in milliseconds."""
+
+    @abstractmethod
+    def get_exposure_range_ms(self) -> tuple[float, float, float]:
+        """Return min, max, step exposure in milliseconds."""

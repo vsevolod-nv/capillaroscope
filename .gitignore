@@ -206,7 +206,10 @@ tempCodeRunnerFile.py
 # Local vendor SDK files
 CameraSDK/
 CameraSDK*.tar.gz
-vendor/mindvision/
+vendor/mindvision/*
+!vendor/mindvision/MVCAMSDK_X64.dll
+!vendor/mindvision/README.md
+!vendor/mindvision/mvsdk.py
 
 # Local medical and mock media
 media/mock_camera/photos/*
@@ -215,6 +218,8 @@ media/captures/videos/*
 media/processed/frames/*
 media/processed/masks/*
 media/processed/overlays/*
+!media/**/.gitkeep
+!media/mock_camera/photos/WIN_20260715_20_58_43_Pro.jpg
 
 # Ruff stuff:
 .ruff_cache/
@@ -229,3 +234,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# Local capillaroscope database
+media/*.sqlite3
+media/*.sqlite3-journal
+
+# Local camera SDK installer
+MindVision Camera Platform Setup*.exe

@@ -8,7 +8,7 @@ from capillaroscope_app.hardware.mock_camera import MockCamera
 
 
 def create_preview_camera() -> CameraBase:
-    requested = 'mindvision' #os.environ.get("CAPILLAROSCOPE_CAMERA", "auto").lower()
+    requested = os.environ.get("CAPILLAROSCOPE_CAMERA", "auto").lower()
     if requested == "mock":
         camera = MockCamera("Mock camera forced by CAPILLAROSCOPE_CAMERA=mock")
         camera.connect()
