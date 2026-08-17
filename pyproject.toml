@@ -1,0 +1,4 @@
+[tool.black]
+extend-exclude = '''
+/(vendor|venv|\.venv)/
+'''

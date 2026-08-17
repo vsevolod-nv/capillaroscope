@@ -1,0 +1,1 @@
+"""Capillaroscope desktop application."""

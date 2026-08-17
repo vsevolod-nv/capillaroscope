@@ -1,0 +1,44 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+
+title C4 Component diagram: Application
+
+Container(ui, "UI", "Desktop GUI", "Показывает интерфейс и передает действия пользователя.")
+Container(hardware_adapter, "Hardware adapter", "Python package", "Работает с камерой и микроконтроллером через общие интерфейсы.")
+Container(processing, "Processing", "Python package", "Обрабатывает уже сохраненные видео/фото и формирует результаты анализа.")
+ContainerDb(metadata_db, "Metadata DB", "PostgreSQL / SQLite", "Хранит пациентов, диагнозы, сессии, media records и результаты.")
+Container(file_storage, "File Storage", "Filesystem / NAS", "Хранит видео, фото, выбранные кадры, маски и overlay.")
+
+Container_Boundary(application, "Application") {
+    Component(device_controller, "Device controller", "Python", "Управляет подключением устройства, подсветкой, фокусом и статусами.")
+    Component(camera_controller, "Camera controller", "Python", "Управляет камерой, настройками съемки и получением кадров.")
+    Component(preview_service, "Preview service", "Python", "Организует поток предпросмотра для UI.")
+    Component(measurement_service, "Measurement service", "Python", "Запускает исследование и собирает пары кадров для разных каналов подсветки.")
+    Component(processing_controller, "Processing controller", "Python", "Запускает анализ сохраненного media_id/path, отслеживает статус и сохраняет результаты.")
+    Component(database_controller, "Database controller", "Python", "Управляет чтением и записью пациентов, диагнозов, сессий, media records и результатов.")
+}
+
+Rel(ui, preview_service, "Запускает и останавливает предпросмотр")
+Rel(ui, measurement_service, "Запускает исследование")
+Rel(ui, processing_controller, "Запускает или повторяет анализ сохраненного медиа")
+Rel(ui, device_controller, "Меняет параметры подсветки и фокуса")
+Rel(ui, camera_controller, "Меняет параметры камеры")
+Rel(ui, database_controller, "Создает и редактирует пациентов, диагнозы и сессии")
+
+Rel(preview_service, camera_controller, "Запрашивает кадры предпросмотра")
+Rel(measurement_service, device_controller, "Управляет подсветкой и фокусом")
+Rel(measurement_service, camera_controller, "Получает кадры исследования")
+Rel(measurement_service, processing_controller, "Передает media_id после сохранения исходных файлов")
+
+Rel(device_controller, hardware_adapter, "Отправляет команды устройству")
+Rel(camera_controller, hardware_adapter, "Управляет камерой и получает кадры")
+Rel(measurement_service, file_storage, "Сначала сохраняет исходные видео/фото")
+Rel(measurement_service, database_controller, "Сохраняет сессию, media record, настройки и метаданные")
+Rel(processing_controller, database_controller, "Читает media record; обновляет статус, результаты и ссылки на артефакты")
+Rel(database_controller, metadata_db, "Читает и записывает данные приложения")
+Rel(processing_controller, processing, "Запускает анализ сохраненного файла")
+Rel(processing, file_storage, "Читает видео/фото; сохраняет выбранные кадры, маски и overlay")
+Rel(processing, processing_controller, "Возвращает метрики и пути к артефактам")
+@enduml
