@@ -1,0 +1,196 @@
+Project capillaroscope {
+  Note: 'Компактная ERD для капилляроскопа. Фото и видео хранятся в файловом хранилище, в БД хранятся их ключи и метаданные.'
+}
+
+Enum visit_status {
+  planned
+  in_progress
+  completed
+  cancelled
+}
+
+Enum diagnosis_status {
+  active
+  resolved
+  refuted
+}
+
+Enum eye_side {
+  left
+  right
+  both
+  unknown
+}
+
+Enum capture_status {
+  capturing
+  captured
+  saved
+  failed
+}
+
+Enum file_status {
+  writing
+  ready
+  failed
+}
+
+Enum processing_status {
+  queued
+  processing
+  completed
+  failed
+}
+
+Table patients {
+  id uuid [pk]
+  medical_record_number varchar(64) [not null, unique]
+  full_name varchar(256) [not null]
+  birth_date date
+  condition_description text
+  created_at timestamp [not null, default: `now()`]
+}
+
+Table doctors {
+  id uuid [pk]
+  full_name varchar(256) [not null]
+  specialty varchar(128)
+  created_at timestamp [not null, default: `now()`]
+}
+
+Table diagnoses {
+  id uuid [pk]
+  code varchar(64)
+  name varchar(256) [not null]
+}
+
+Table visits {
+  id uuid [pk]
+  patient_id uuid [not null]
+  doctor_id uuid
+  status visit_status [not null, default: 'planned']
+  started_at timestamp
+  ended_at timestamp
+  description text
+  created_at timestamp [not null, default: `now()`]
+
+  Indexes {
+    (patient_id, created_at)
+  }
+}
+
+Table patient_diagnoses {
+  id uuid [pk]
+  patient_id uuid [not null]
+  diagnosis_id uuid [not null]
+  visit_id uuid
+  status diagnosis_status [not null, default: 'active']
+  diagnosed_at timestamp [not null, default: `now()`]
+  notes text
+
+  Indexes {
+    (patient_id, status)
+  }
+}
+
+// Одна запись видео — один файл в хранилище.
+Table videos {
+  id uuid [pk]
+  visit_id uuid [not null]
+  eye eye_side [not null, default: 'unknown']
+  storage_key text [not null, unique]
+  recorded_at timestamp [not null]
+  duration_ms bigint
+  fps decimal(8,3)
+  width_px int
+  height_px int
+  codec varchar(64)
+  status file_status [not null, default: 'writing']
+
+  Indexes {
+    (visit_id, recorded_at)
+  }
+}
+
+// Одно нажатие врача = одна серия из 2–3 снимков.
+Table capture_series {
+  id uuid [pk]
+  visit_id uuid [not null]
+  video_id uuid
+  eye eye_side [not null]
+  expected_frame_count int [not null]
+  status capture_status [not null, default: 'capturing']
+  started_at timestamp [not null]
+  saved_at timestamp
+  error_message text
+
+  Indexes {
+    (visit_id, started_at)
+  }
+}
+
+Table photos {
+  id uuid [pk]
+  capture_series_id uuid [not null]
+  step_number int [not null]
+  storage_key text [not null, unique]
+  captured_at timestamp [not null]
+
+  // Настройки подсветки можно заполнять после появления контроллера.
+  illumination_channel varchar(64)
+  wavelength_nm decimal(8,3)
+  pwm_frequency_hz decimal(14,3)
+  exposure_us bigint
+
+  // Заполняется, если снимок взят из сохраняемого видео.
+  video_frame_number bigint
+  video_offset_ms bigint
+
+  width_px int
+  height_px int
+  pixel_format varchar(64)
+  bit_depth int
+  status file_status [not null, default: 'writing']
+
+  Indexes {
+    (capture_series_id, step_number) [unique]
+    (captured_at)
+  }
+}
+
+// Результат может строиться сразу по всем 2–3 снимкам серии.
+Table processed_photo {
+  id uuid [pk]
+  capture_series_id uuid [not null]
+  result_type varchar(64) [not null]
+  storage_key text [not null, unique]
+  algorithm_name varchar(128) [not null]
+  algorithm_version varchar(64) [not null]
+  parameters_json json
+  status processing_status [not null, default: 'queued']
+  created_at timestamp [not null, default: `now()`]
+  completed_at timestamp
+  error_message text
+
+  Indexes {
+    (capture_series_id, created_at)
+  }
+}
+
+Ref: visits.patient_id > patients.id
+Ref: visits.doctor_id > doctors.id
+
+Ref: patient_diagnoses.patient_id > patients.id
+Ref: patient_diagnoses.diagnosis_id > diagnoses.id
+Ref: patient_diagnoses.visit_id > visits.id
+
+Ref: videos.visit_id > visits.id
+
+Ref: capture_series.visit_id > visits.id
+Ref: capture_series.video_id > videos.id
+
+Ref: photos.capture_series_id > capture_series.id
+Ref: processed_photo.capture_series_id > capture_series.id
+
+
+Ref: "videos"."storage_key" -? "videos"."id"

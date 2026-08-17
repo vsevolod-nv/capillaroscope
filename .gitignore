@@ -229,3 +229,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# Local capillaroscope database
+media/*.sqlite3
+media/*.sqlite3-journal
+
+# Local camera SDK installer
+MindVision Camera Platform Setup*.exe
