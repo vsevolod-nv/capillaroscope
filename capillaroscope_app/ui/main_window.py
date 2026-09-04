@@ -7,111 +7,79 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
-    QPushButton,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
-    QCheckBox,
-    QDoubleSpinBox,
 )
 
 from capillaroscope_app.application.preview_service import PreviewService
-from capillaroscope_app.domain.models import CameraStatus, Frame
+from capillaroscope_app.domain.models import Frame
 from capillaroscope_app.hardware.camera_base import CameraError
 from capillaroscope_app.hardware.camera_factory import create_preview_camera
 from capillaroscope_app.hardware.mock_camera import MockCamera
 from capillaroscope_app.storage.media_storage import MediaStorage
+from capillaroscope_app.ui.control_panel import ControlPanel
 
 
 class MainWindow(QMainWindow):
     def __init__(self, camera) -> None:
         super().__init__()
         self.setWindowTitle("Capillaroscope Preview")
+
         self._preview_service = PreviewService(camera)
         self._storage = MediaStorage()
         self._last_frame: Frame | None = None
         self._storage_message = ""
+
         self._timer = QTimer(self)
-        self._timer.setInterval(33)  # туду: перенести в отдельный конфиг
+        self._timer.setInterval(33)
         self._timer.timeout.connect(self._update_frame)
 
-        self._preview_label = QLabel()
-        self._preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._preview_label.setMinimumSize(860, 620)
+        self._preview_label = QLabel(alignment=Qt.AlignmentFlag.AlignCenter)
+        self._preview_label.setMinimumSize(640, 480)
         self._preview_label.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Expanding,
         )
-
         self._status_label = QLabel()
         self._status_label.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
 
-        self._photo_button = QPushButton("Take photo")
-        self._photo_button.clicked.connect(self._take_photo)
+        self._controls = ControlPanel()
+        self._controls.photo_requested.connect(self._take_photo)
+        self._controls.recording_toggled.connect(self._toggle_recording)
+        self._controls.reconnect_requested.connect(self._reconnect)
+        self._controls.pause_toggled.connect(self._toggle_pause)
+        self._controls.manual_exposure_toggled.connect(self._toggle_manual_exposure)
+        self._controls.exposure_changed.connect(self._change_exposure)
 
-        self._record_button = QPushButton("Start video")
-        self._record_button.setCheckable(True)
-        self._record_button.clicked.connect(self._toggle_recording)
+        preview_layout = QVBoxLayout()
+        preview_layout.addWidget(self._preview_label, 1)
+        preview_layout.addWidget(self._status_label)
 
-        self._restart_button = QPushButton("Reconnect")
-        self._restart_button.clicked.connect(self._reconnect)
-
-        self._pause_button = QPushButton("Pause")
-        self._pause_button.setCheckable(True)
-        self._pause_button.clicked.connect(self._toggle_pause)
-
-        self._exposure_checkbox = QCheckBox()
-        self._exposure_checkbox.setToolTip("Ручная экспозиция")
-
-        self._exposure_spinbox = QDoubleSpinBox()
-        self._exposure_spinbox.setSuffix(" мс")
-        self._exposure_spinbox.setDecimals(2)
-        self._exposure_spinbox.setKeyboardTracking(False)
-        self._exposure_spinbox.setEnabled(False)
-
-        self._exposure_state_label = QLabel("Авто")
-
-        self._exposure_checkbox.toggled.connect(self._toggle_manual_exposure)
-        self._exposure_spinbox.valueChanged.connect(self._change_exposure)
-
-        controls = QHBoxLayout()
-        controls.addWidget(self._photo_button)
-        controls.addWidget(self._record_button)
-        controls.addWidget(self._restart_button)
-        controls.addWidget(self._pause_button)
-        controls.addStretch(1)
-        controls.addWidget(QLabel("Экспозиция"))
-        controls.addWidget(self._exposure_checkbox)
-        controls.addWidget(self._exposure_spinbox)
-        controls.addWidget(self._exposure_state_label)
-
-        layout = QVBoxLayout()
-        layout.addWidget(self._preview_label, 1)
-        layout.addWidget(self._status_label)
-        layout.addLayout(controls)
+        layout = QHBoxLayout()
+        layout.addWidget(self._controls)
+        layout.addLayout(preview_layout, 1)
 
         root = QWidget()
         root.setLayout(layout)
         self.setCentralWidget(root)
 
+        self._sync_exposure_controls()
         self._update_status()
         self._timer.start()
-
-        self._sync_exposure_controls()
 
     def _update_frame(self) -> None:
         try:
             frame = self._preview_service.next_frame()
         except CameraError as exc:
             self._finish_recording()
-            fallback = MockCamera(reason=f"Preview failed: {exc}")
-            self._preview_service.restart(fallback)
+            self._preview_service.restart(MockCamera(reason=f"Preview failed: {exc}"))
+            self._sync_exposure_controls()
             frame = self._preview_service.next_frame()
 
         self._last_frame = frame
-
         if self._storage.is_recording:
             try:
                 self._storage.write_video_frame(frame)
@@ -122,139 +90,113 @@ class MainWindow(QMainWindow):
         self._render_frame(frame)
         self._update_status()
 
-        if not self._exposure_checkbox.isChecked():
-            self._sync_exposure_controls()
-
     def _take_photo(self) -> None:
         if self._last_frame is None:
             self._storage_message = "Кадр от камеры ещё не получен"
-            self._update_status()
-            return
-
-        try:
-            photo_path = self._storage.save_photo(self._last_frame)
-            self._storage_message = f"Фото сохранено: {photo_path.name}"
-        except Exception as exc:
-            self._storage_message = f"Ошибка сохранения фото: {exc}"
-
+        else:
+            try:
+                path = self._storage.save_photo(self._last_frame)
+                self._storage_message = f"Фото сохранено: {path.name}"
+            except Exception as exc:
+                self._storage_message = f"Ошибка сохранения фото: {exc}"
         self._update_status()
 
-    def _toggle_recording(self, checked: bool) -> None:
-        if checked:
-            if self._last_frame is None:
-                self._record_button.setChecked(False)
-                self._storage_message = "Кадр от камеры ещё не получен"
-                self._update_status()
-                return
-
-            try:
-                video_path = self._storage.start_video(self._last_frame)
-                self._record_button.setText("Stop video")
-                self._storage_message = f"Запись видео: {video_path.name}"
-            except Exception as exc:
-                self._record_button.setChecked(False)
-                self._storage_message = f"Ошибка запуска видео: {exc}"
-        else:
+    def _toggle_recording(self, recording: bool) -> None:
+        if not recording:
             self._finish_recording()
-
+        elif self._last_frame is None:
+            self._controls.set_recording(False)
+            self._storage_message = "Кадр от камеры ещё не получен"
+        else:
+            try:
+                path = self._storage.start_video(self._last_frame)
+                self._controls.set_recording(True)
+                self._storage_message = f"Запись видео: {path.name}"
+            except Exception as exc:
+                self._controls.set_recording(False)
+                self._storage_message = f"Ошибка запуска видео: {exc}"
         self._update_status()
 
     def _finish_recording(self) -> None:
-        if not self._storage.is_recording:
-            self._record_button.setChecked(False)
-            self._record_button.setText("Start video")
-            return
-
         try:
-            video_path = self._storage.stop_video()
-            if video_path is not None:
-                self._storage_message = f"Видео сохранено: {video_path.name}"
+            path = self._storage.stop_video()
+            if path is not None:
+                self._storage_message = f"Видео сохранено: {path.name}"
         except Exception as exc:
             self._storage_message = f"Ошибка сохранения видео: {exc}"
         finally:
-            self._record_button.setChecked(False)
-            self._record_button.setText("Start video")
+            self._controls.set_recording(False)
 
     def _render_frame(self, frame: Frame) -> None:
         rgb = np.ascontiguousarray(frame.image)
         height, width, channels = rgb.shape
-        bytes_per_line = channels * width
         image = QImage(
             rgb.data,
             width,
             height,
-            bytes_per_line,
+            channels * width,
             QImage.Format.Format_RGB888,
         ).copy()
-        pixmap = QPixmap.fromImage(image)
-        scaled = pixmap.scaled(
-            self._preview_label.size(),
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
+        self._preview_label.setPixmap(
+            QPixmap.fromImage(image).scaled(
+                self._preview_label.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
         )
-        self._preview_label.setPixmap(scaled)
 
     def _update_status(self) -> None:
         status = self._preview_service.get_status()
-        text = self._format_status(status)
+        parts = [
+            "MOCK" if status.is_mock else "REAL",
+            status.camera_name,
+            "preview" if status.is_preview_active else "stopped",
+        ]
+        if status.error_message:
+            parts.append(status.error_message)
         if self._storage_message:
-            text += f" | {self._storage_message}"
-        self._status_label.setText(text)
-
-    def _format_status(self, status: CameraStatus) -> str:
-        source = "MOCK" if status.is_mock else "REAL"
-        state = "preview" if status.is_preview_active else "stopped"
-        error = f" | {status.error_message}" if status.error_message else ""
-        return f"{source} | {status.camera_name} | {state}{error}"
+            parts.append(self._storage_message)
+        self._status_label.setText(" | ".join(parts))
 
     def _reconnect(self) -> None:
         self._finish_recording()
         self._timer.stop()
         self._preview_service.close()
-        camera = create_preview_camera()
-        self._preview_service.restart(camera)
-        self._pause_button.setChecked(False)
-        self._pause_button.setText("Pause")
+        self._preview_service.restart(create_preview_camera())
+        self._controls.set_paused(False)
+        self._sync_exposure_controls()
         self._update_status()
         self._timer.start()
 
-    def _toggle_pause(self) -> None:
-        if self._pause_button.isChecked():
+    def _toggle_pause(self, paused: bool) -> None:
+        if paused:
             self._finish_recording()
             self._timer.stop()
             self._preview_service.stop()
-            self._pause_button.setText("Resume")
         else:
             self._preview_service.start()
             self._timer.start()
-            self._pause_button.setText("Pause")
+        self._controls.set_paused(paused)
         self._update_status()
 
     def _sync_exposure_controls(self) -> None:
-        min_ms, max_ms, step_ms = self._preview_service.get_exposure_range_ms()
-        self._exposure_spinbox.setRange(min_ms, max_ms)
-        self._exposure_spinbox.setSingleStep(step_ms)
-
-        exposure_ms = self._preview_service.get_exposure_ms()
-        if exposure_ms is not None:
-            self._exposure_spinbox.blockSignals(True)
-            self._exposure_spinbox.setValue(exposure_ms)
-            self._exposure_spinbox.blockSignals(False)
+        self._controls.set_exposure_range(
+            *self._preview_service.get_exposure_range_ms()
+        )
+        exposure = self._preview_service.get_exposure_ms()
+        if exposure is not None:
+            self._controls.set_exposure_value(exposure)
 
     def _toggle_manual_exposure(self, manual: bool) -> None:
         self._preview_service.set_auto_exposure(not manual)
-        self._exposure_spinbox.setEnabled(manual)
-
+        self._controls.set_manual_exposure(manual)
         if manual:
-            self._exposure_state_label.setText("Ручная")
-            self._preview_service.set_exposure_ms(self._exposure_spinbox.value())
+            self._preview_service.set_exposure_ms(self._controls.exposure_value)
         else:
-            self._exposure_state_label.setText("Авто")
             self._sync_exposure_controls()
 
     def _change_exposure(self, exposure_ms: float) -> None:
-        if self._exposure_checkbox.isChecked():
-            self._preview_service.set_exposure_ms(exposure_ms)
+        self._preview_service.set_exposure_ms(exposure_ms)
 
     def closeEvent(self, event) -> None:
         self._timer.stop()
