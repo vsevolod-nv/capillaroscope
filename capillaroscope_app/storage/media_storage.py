@@ -1,6 +1,3 @@
-from __future__ import annotations
-
-import sqlite3
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,6 +6,8 @@ from uuid import uuid4
 import cv2
 
 from capillaroscope_app.domain.models import Frame
+from capillaroscope_app.storage.database import connect_database
+from capillaroscope_app.storage.media_repository import MediaRepository
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -23,10 +22,8 @@ class MediaStorage:
         self._photos_dir.mkdir(parents=True, exist_ok=True)
         self._videos_dir.mkdir(parents=True, exist_ok=True)
 
-        self._db_path = project_root / "media" / "capillaroscope.sqlite3"
-        self._connection = sqlite3.connect(self._db_path)
-
-        self._create_tables()
+        self._connection = connect_database(project_root)
+        self._repository = MediaRepository(self._connection)
 
         self._video_writer: cv2.VideoWriter | None = None
         self._video_path: Path | None = None
@@ -37,24 +34,6 @@ class MediaStorage:
     @property
     def is_recording(self) -> bool:
         return self._video_writer is not None
-
-    def _create_tables(self) -> None:
-        self._connection.executescript("""
-            CREATE TABLE IF NOT EXISTS photos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                path TEXT NOT NULL UNIQUE,
-                captured_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS videos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                path TEXT NOT NULL UNIQUE,
-                started_at TEXT NOT NULL,
-                ended_at TEXT NOT NULL,
-                duration_seconds REAL NOT NULL
-            );
-            """)
-        self._connection.commit()
 
     def save_photo(self, frame: Frame) -> Path:
         captured_at = frame.timestamp.astimezone(timezone.utc)
@@ -74,22 +53,21 @@ class MediaStorage:
         photo_path.write_bytes(image_buffer.tobytes())
 
         try:
-            self._connection.execute(
-                """
-                INSERT INTO photos (path, captured_at)
-                VALUES (?, ?)
-                """,
-                (
-                    self._relative_path(photo_path),
-                    captured_at.isoformat(),
-                ),
+            self._repository.add_photo(
+                self._relative_path(photo_path),
+                captured_at,
             )
-            self._connection.commit()
         except Exception:
             photo_path.unlink(missing_ok=True)
             raise
 
         return photo_path
+
+    def list_recent_photo_paths(self, limit: int = 8) -> list[Path]:
+        return [
+            self._project_root / path
+            for path in self._repository.list_recent_photo_paths(limit)
+        ]
 
     def start_video(self, frame: Frame, fps: float = 30.0) -> Path:
         if self.is_recording:
@@ -161,24 +139,12 @@ class MediaStorage:
         ended_at = datetime.now(timezone.utc)
         duration_seconds = time.monotonic() - started_monotonic
 
-        self._connection.execute(
-            """
-            INSERT INTO videos (
-                path,
-                started_at,
-                ended_at,
-                duration_seconds
-            )
-            VALUES (?, ?, ?, ?)
-            """,
-            (
-                self._relative_path(video_path),
-                started_at.isoformat(),
-                ended_at.isoformat(),
-                duration_seconds,
-            ),
+        self._repository.add_video(
+            self._relative_path(video_path),
+            started_at,
+            ended_at,
+            duration_seconds,
         )
-        self._connection.commit()
 
         return video_path
 
