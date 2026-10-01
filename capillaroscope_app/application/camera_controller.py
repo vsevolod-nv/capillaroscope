@@ -85,7 +85,7 @@ class CameraController(QObject):
         self.paused_changed.emit(paused)
         self._update_status()
 
-    def toggle_manual_exposure(self, manual: bool) -> None: #баг
+    def toggle_manual_exposure(self, manual: bool, exposure_ms: float) -> None:
         self._preview_service.set_auto_exposure(not manual)
         if manual:
             self._preview_service.set_exposure_ms(exposure_ms)

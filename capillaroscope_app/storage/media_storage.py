@@ -9,8 +9,6 @@ from capillaroscope_app.domain.models import Frame
 from capillaroscope_app.storage.database import connect_database
 from capillaroscope_app.storage.media_repository import MediaRepository
 
-
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 

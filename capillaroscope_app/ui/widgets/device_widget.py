@@ -40,7 +40,7 @@ class DeviceWidget(QGroupBox):
         self._manual_exposure.toggled.connect(self.manual_exposure_toggled.emit)
         self._exposure.valueChanged.connect(self.exposure_changed.emit)
 
-    @property #баг
+    @property  # баг
     def exposure_value(self) -> float:
         return self._exposure.value()
 

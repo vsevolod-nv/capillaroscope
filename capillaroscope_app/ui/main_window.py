@@ -49,7 +49,9 @@ class MainWindow(QMainWindow):
         )
         self._device.reconnect_requested.connect(self._camera_controller.reconnect)
         self._device.pause_toggled.connect(self._camera_controller.toggle_pause)
-        self._device.manual_exposure_toggled.connect(self._device.set_manual_exposure) #баг
+        self._device.manual_exposure_toggled.connect(
+            self._device.set_manual_exposure
+        )  # баг
         self._device.manual_exposure_toggled.connect(
             lambda manual: self._camera_controller.toggle_manual_exposure(
                 manual,
