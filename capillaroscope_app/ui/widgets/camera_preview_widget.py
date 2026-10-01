@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import numpy as np
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage, QPixmap
@@ -13,9 +11,7 @@ class CameraPreviewWidget(QWidget):
         super().__init__()
         self._preview_label = QLabel(alignment=Qt.AlignmentFlag.AlignCenter)
         self._preview_label.setMinimumSize(640, 480)
-        self._preview_label.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-        )
+        self._preview_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)

@@ -1,16 +1,15 @@
-from __future__ import annotations
-
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
 import cv2
-from loguru import logger
 
 from capillaroscope_app.domain.models import Frame
 from capillaroscope_app.storage.database import connect_database
 from capillaroscope_app.storage.media_repository import MediaRepository
+
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -54,7 +53,6 @@ class MediaStorage:
             raise RuntimeError("Не удалось закодировать фотографию")
 
         photo_path.write_bytes(image_buffer.tobytes())
-        logger.info("Photo file saved: {}", photo_path)
 
         try:
             self._repository.add_photo(
@@ -68,12 +66,10 @@ class MediaStorage:
         return photo_path
 
     def list_recent_photo_paths(self, limit: int = 8) -> list[Path]:
-        paths = [
+        return [
             self._project_root / path
             for path in self._repository.list_recent_photo_paths(limit)
         ]
-        logger.debug("Resolved {} recent photo paths", len(paths))
-        return paths
 
     def start_video(self, frame: Frame, fps: float = 30.0) -> Path:
         if self.is_recording:
