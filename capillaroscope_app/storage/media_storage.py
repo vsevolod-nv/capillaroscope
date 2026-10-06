@@ -1,15 +1,25 @@
+import sqlite3
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
 import cv2
+from loguru import logger
 
 from capillaroscope_app.domain.models import Frame
 from capillaroscope_app.storage.database import connect_database
 from capillaroscope_app.storage.media_repository import MediaRepository
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+class PhotoSaveError(RuntimeError):
+    """Raised when a photo cannot be encoded, written, or registered."""
+
+
+class RecentPhotosLoadError(RuntimeError):
+    """Raised when the recent-photo list cannot be read."""
 
 
 class MediaStorage:
@@ -44,34 +54,50 @@ class MediaStorage:
         )
         photo_path = self._photos_dir / filename
 
-        bgr_image = cv2.cvtColor(frame.image, cv2.COLOR_RGB2BGR)
-        encoded, image_buffer = cv2.imencode(".png", bgr_image)
+        try:
+            bgr_image = cv2.cvtColor(frame.image, cv2.COLOR_RGB2BGR)
+            encoded, image_buffer = cv2.imencode(".png", bgr_image)
+        except cv2.error as exc:
+            raise PhotoSaveError("Failed to process photo image") from exc
 
         if not encoded:
-            raise RuntimeError("Не удалось закодировать фотографию")
+            raise PhotoSaveError("Failed to encode photo")
 
-        photo_path.write_bytes(image_buffer.tobytes())
+        try:
+            photo_path.write_bytes(image_buffer.tobytes())
+        except OSError as exc:
+            raise PhotoSaveError("Failed to write photo file") from exc
 
         try:
             self._repository.add_photo(
                 self._relative_path(photo_path),
                 captured_at,
             )
+        except sqlite3.Error as exc:
+            logger.exception(
+                "Failed to add photo record, rolling back transaction: {}",
+                photo_path,
+            )
+            self._connection.rollback()
+            photo_path.unlink(missing_ok=True)
+            raise PhotoSaveError("Failed to save photo metadata") from exc
         except Exception:
+            logger.exception("Failed to save photo metadata: {}", photo_path)
             photo_path.unlink(missing_ok=True)
             raise
 
         return photo_path
 
     def list_recent_photo_paths(self, limit: int = 8) -> list[Path]:
-        return [
-            self._project_root / path
-            for path in self._repository.list_recent_photo_paths(limit)
-        ]
+        try:
+            paths = self._repository.list_recent_photo_paths(limit)
+        except sqlite3.Error as exc:
+            raise RecentPhotosLoadError("Failed to load recent photos") from exc
+        return [self._project_root / path for path in paths]
 
     def start_video(self, frame: Frame, fps: float = 30.0) -> Path:
         if self.is_recording:
-            raise RuntimeError("Запись видео уже запущена")
+            raise RuntimeError("Video recording is already running")
 
         height, width = frame.image.shape[:2]
         started_at = datetime.now(timezone.utc)
@@ -92,8 +118,8 @@ class MediaStorage:
         if not writer.isOpened():
             writer.release()
             raise RuntimeError(
-                "Не удалось открыть видеофайл. "
-                "Проверь поддержку кодека mp4v и путь к проекту."
+                "Failed to open video file. "
+                "Check mp4v codec support and the project path."
             )
 
         self._video_writer = writer
@@ -111,7 +137,7 @@ class MediaStorage:
         height, width = frame.image.shape[:2]
 
         if self._video_size != (width, height):
-            raise RuntimeError("Во время записи изменилось разрешение камеры")
+            raise RuntimeError("Camera resolution changed during recording")
 
         bgr_image = cv2.cvtColor(frame.image, cv2.COLOR_RGB2BGR)
         self._video_writer.write(bgr_image)
@@ -125,16 +151,16 @@ class MediaStorage:
         started_at = self._video_started_at
         started_monotonic = self._video_started_monotonic
 
+        writer.release()
+
         self._video_writer = None
         self._video_path = None
         self._video_started_at = None
         self._video_started_monotonic = None
         self._video_size = None
 
-        writer.release()
-
         if video_path is None or started_at is None or started_monotonic is None:
-            raise RuntimeError("Не найдены данные текущей видеозаписи")
+            raise RuntimeError("Current video recording metadata is missing")
 
         ended_at = datetime.now(timezone.utc)
         duration_seconds = time.monotonic() - started_monotonic

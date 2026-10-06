@@ -5,6 +5,8 @@ from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtWidgets import QGridLayout, QGroupBox, QLabel
 
+from capillaroscope_app.ui.styles import PHOTO_LABEL, PHOTO_LABEL_HOVERED
+
 
 class PhotoLabel(QLabel):
     def __init__(self, path: Path) -> None:
@@ -34,11 +36,7 @@ class PhotoLabel(QLabel):
         self._set_hovered(False)
 
     def _set_hovered(self, hovered: bool) -> None:
-        self.setStyleSheet(
-            "QLabel { border: 2px solid #B0C4DE; background: #eaf3ff; }"
-            if hovered
-            else "QLabel { border: 2px solid transparent; background: transparent; }"
-        )
+        self.setStyleSheet(PHOTO_LABEL_HOVERED if hovered else PHOTO_LABEL)
         if self._pixmap is None:
             return
 

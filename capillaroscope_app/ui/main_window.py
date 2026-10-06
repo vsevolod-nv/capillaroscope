@@ -45,18 +45,13 @@ class MainWindow(QMainWindow):
             self._camera_controller.take_photo
         )
         self._capture_controls.recording_toggled.connect(
-            self._camera_controller.toggle_recording
+            self._camera_controller.set_recording_enabled
         )
         self._device.reconnect_requested.connect(self._camera_controller.reconnect)
         self._device.pause_toggled.connect(self._camera_controller.toggle_pause)
+        self._device.manual_exposure_toggled.connect(self._device.set_manual_exposure)
         self._device.manual_exposure_toggled.connect(
-            self._device.set_manual_exposure
-        )  # баг
-        self._device.manual_exposure_toggled.connect(
-            lambda manual: self._camera_controller.toggle_manual_exposure(
-                manual,
-                self._device.exposure_value,
-            )
+            self._camera_controller.toggle_manual_exposure
         )
         self._device.exposure_changed.connect(self._camera_controller.change_exposure)
 

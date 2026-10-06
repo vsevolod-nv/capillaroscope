@@ -18,7 +18,7 @@ class PreviewService:
         finally:
             self._camera.disconnect()
 
-    def restart(self, camera: CameraBase) -> None:
+    def replace_camera(self, camera: CameraBase) -> None:
         self.close()
         self._camera = camera
         self._camera.start_preview()

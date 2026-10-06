@@ -21,28 +21,28 @@ class DeviceWidget(QGroupBox):
         self._pause_button.setCheckable(True)
         self._reconnect_button = QPushButton("Переподключить")
         self._manual_exposure = QCheckBox("Ручная экспозиция")
-        self._exposure = QDoubleSpinBox()
-        self._exposure.setSuffix(" мс")
-        self._exposure.setDecimals(2)
-        self._exposure.setKeyboardTracking(False)
-        self._exposure.setEnabled(False)
+        self._exposure_spinbox = QDoubleSpinBox()
+        self._exposure_spinbox.setSuffix(" мс")
+        self._exposure_spinbox.setDecimals(2)
+        self._exposure_spinbox.setKeyboardTracking(False)
+        self._exposure_spinbox.setEnabled(False)
 
         layout = QVBoxLayout(self)
         layout.addWidget(self._pause_button)
         layout.addWidget(self._reconnect_button)
         layout.addWidget(self._manual_exposure)
-        layout.addWidget(self._exposure)
+        layout.addWidget(self._exposure_spinbox)
 
         self._pause_button.toggled.connect(self.pause_toggled.emit)
         self._reconnect_button.clicked.connect(
             lambda _checked=False: self.reconnect_requested.emit()
         )
         self._manual_exposure.toggled.connect(self.manual_exposure_toggled.emit)
-        self._exposure.valueChanged.connect(self.exposure_changed.emit)
+        self._exposure_spinbox.valueChanged.connect(self.exposure_changed.emit)
 
-    @property  # баг
-    def exposure_value(self) -> float:
-        return self._exposure.value()
+    @property
+    def exposure_ms(self) -> float:
+        return self._exposure_spinbox.value()
 
     def set_paused(self, paused: bool) -> None:
         with QSignalBlocker(self._pause_button):
@@ -52,13 +52,13 @@ class DeviceWidget(QGroupBox):
     def set_manual_exposure(self, manual: bool) -> None:
         with QSignalBlocker(self._manual_exposure):
             self._manual_exposure.setChecked(manual)
-        self._exposure.setEnabled(manual)
+        self._exposure_spinbox.setEnabled(manual)
 
     def set_exposure_range(self, minimum: float, maximum: float, step: float) -> None:
-        with QSignalBlocker(self._exposure):
-            self._exposure.setRange(minimum, maximum)
-            self._exposure.setSingleStep(step)
+        with QSignalBlocker(self._exposure_spinbox):
+            self._exposure_spinbox.setRange(minimum, maximum)
+            self._exposure_spinbox.setSingleStep(step)
 
     def set_exposure_value(self, value: float) -> None:
-        with QSignalBlocker(self._exposure):
-            self._exposure.setValue(value)
+        with QSignalBlocker(self._exposure_spinbox):
+            self._exposure_spinbox.setValue(value)
