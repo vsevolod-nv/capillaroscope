@@ -1,0 +1,421 @@
+warning: in the working copy of 'capillaroscope_app/app.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'capillaroscope_app/ui/main_window.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'capillaroscope_app/ui/widgets/recent_frames_widget.py', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/capillaroscope_app/app.py b/capillaroscope_app/app.py[m
+[1mindex e44da24..a0536b2 100644[m
+[1m--- a/capillaroscope_app/app.py[m
+[1m+++ b/capillaroscope_app/app.py[m
+[36m@@ -6,7 +6,7 @@[m [mfrom pathlib import Path[m
+ from loguru import logger[m
+ from PySide6.QtWidgets import QApplication[m
+ [m
+[31m-from capillaroscope_app.hardware.camera_factory import create_preview_camera[m
+[32m+[m[32mfrom capillaroscope_app.application.app_runtime import AppRuntime[m
+ from capillaroscope_app.ui.main_window import MainWindow[m
+ [m
+ if __package__ in {None, ""}:[m
+[36m@@ -20,10 +20,13 @@[m [mdef main() -> int:[m
+     logger.info("Application started. Log file: {}", log_path)[m
+ [m
+     app = QApplication(sys.argv)[m
+[31m-    camera = create_preview_camera()[m
+[31m-    window = MainWindow(camera)[m
+[32m+[m[32m    runtime = AppRuntime(app)[m
+[32m+[m[32m    window = MainWindow(runtime.capture_controller)[m
+[32m+[m[32m    app.aboutToQuit.connect(runtime.shutdown)[m
+[32m+[m
+     window.resize(1120, 780)[m
+     window.show()[m
+[32m+[m[32m    runtime.start()[m
+     return app.exec()[m
+ [m
+ [m
+[1mdiff --git a/capillaroscope_app/application/camera_controller.py b/capillaroscope_app/application/camera_controller.py[m
+[1mdeleted file mode 100644[m
+[1mindex 525c453..0000000[m
+[1m--- a/capillaroscope_app/application/camera_controller.py[m
+[1m+++ /dev/null[m
+[36m@@ -1,261 +0,0 @@[m
+[31m-from __future__ import annotations[m
+[31m-[m
+[31m-from enum import Enum, auto[m
+[31m-[m
+[31m-import cv2[m
+[31m-from PySide6.QtCore import QObject, QTimer, Signal[m
+[31m-from loguru import logger[m
+[31m-[m
+[31m-from capillaroscope_app.application.preview_service import PreviewService[m
+[31m-from capillaroscope_app.domain.models import Frame[m
+[31m-from capillaroscope_app.hardware.camera_base import CameraBase, CameraError[m
+[31m-from capillaroscope_app.hardware.camera_factory import create_preview_camera[m
+[31m-from capillaroscope_app.hardware.mock_camera import MockCamera[m
+[31m-from capillaroscope_app.storage.media_storage import ([m
+[31m-    MediaStorage,[m
+[31m-    PhotoSaveError,[m
+[31m-    RecentPhotosLoadError,[m
+[31m-)[m
+[31m-[m
+[31m-[m
+[31m-class CaptureState(Enum):[m
+[31m-    PREVIEW = auto()[m
+[31m-    RECORDING = auto()[m
+[31m-    PAUSED = auto()[m
+[31m-    ERROR = auto()[m
+[31m-[m
+[31m-[m
+[31m-class CameraController(QObject):[m
+[31m-    frame_ready = Signal(object)[m
+[31m-    status_changed = Signal(str)[m
+[31m-    recent_photos_changed = Signal(list)[m
+[31m-    recording_changed = Signal(bool)[m
+[31m-    paused_changed = Signal(bool)[m
+[31m-    exposure_range_changed = Signal(float, float, float)[m
+[31m-    exposure_value_changed = Signal(float)[m
+[31m-[m
+[31m-    def __init__(self, camera: CameraBase, parent: QObject | None = None) -> None:[m
+[31m-        super().__init__(parent)[m
+[31m-        self._preview_service = PreviewService(camera)[m
+[31m-        self._storage = MediaStorage()[m
+[31m-        self._last_frame: Frame | None = None[m
+[31m-        self._storage_message = ""[m
+[31m-        self._state = CaptureState.PAUSED[m
+[31m-[m
+[31m-        self._timer = QTimer(self)[m
+[31m-        self._timer.setInterval(33)[m
+[31m-        self._timer.timeout.connect(self._update_frame)[m
+[31m-[m
+[31m-    def start(self) -> None:[m
+[31m-        if self._state in (CaptureState.PREVIEW, CaptureState.RECORDING):[m
+[31m-            return[m
+[31m-        self._sync_exposure_controls()[m
+[31m-        self._refresh_recent_frames()[m
+[31m-        self._timer.start()[m
+[31m-        self._set_state(CaptureState.PREVIEW)[m
+[31m-[m
+[31m-    def take_photo(self) -> None:[m
+[31m-        if self._last_frame is None:[m
+[31m-            self._storage_message = "No frame has been received from the camera yet"[m
+[31m-        else:[m
+[31m-            try:[m
+[31m-                path = self._storage.save_photo(self._last_frame)[m
+[31m-            except PhotoSaveError as exc:[m
+[31m-                logger.exception("Failed to save photo")[m
+[31m-                self._storage_message = f"Failed to save photo: {exc}"[m
+[31m-            except Exception:[m
+[31m-                logger.exception("Unexpected error while saving photo")[m
+[31m-                self._storage_message = "Unexpected error while saving photo"[m
+[31m-            else:[m
+[31m-                self._storage_message = f"Фото сохранено: {path.name}"[m
+[31m-                try:[m
+[31m-                    self._refresh_recent_frames()[m
+[31m-                except RecentPhotosLoadError as exc:[m
+[31m-                    logger.exception("Failed to refresh recent photos")[m
+[31m-                    self._storage_message += f". Failed to refresh gallery: {exc}"[m
+[31m-                except Exception:[m
+[31m-                    logger.exception("Unexpected error while refreshing recent photos")[m
+[31m-                    self._storage_message += ". Unexpected gallery refresh error"[m
+[31m-        self._update_status()[m
+[31m-[m
+[31m-    def set_recording_enabled(self, recording: bool) -> None:[m
+[31m-        if recording and self._state is not CaptureState.PREVIEW:[m
+[31m-            logger.warning("Recording rejected in state {}", self._state.name)[m
+[31m-            self._set_state(self._state)[m
+[31m-            return[m
+[31m-        if not recording:[m
+[31m-            self._finish_recording()[m
+[31m-        elif self._last_frame is None:[m
+[31m-            self._storage_message = "No frame has been received from the camera yet"[m
+[31m-            self._set_state(self._state)[m
+[31m-        else:[m
+[31m-            try:[m
+[31m-                path = self._storage.start_video(self._last_frame)[m
+[31m-                self._storage_message = f"Запись видео: {path.name}"[m
+[31m-                self._set_state(CaptureState.RECORDING)[m
+[31m-            except Exception as exc:[m
+[31m-                logger.exception("Failed to start video recording")[m
+[31m-                self._storage_message = f"Failed to start video recording: {exc}"[m
+[31m-                self._set_state([m
+[31m-                    CaptureState.ERROR[m
+[31m-                    if self._storage.is_recording[m
+[31m-                    else CaptureState.PREVIEW[m
+[31m-                )[m
+[31m-[m
+[31m-    def reconnect(self) -> None:[m
+[31m-        self._timer.stop()[m
+[31m-        self._last_frame = None[m
+[31m-        self._storage_message = ""[m
+[31m-        if not self._finish_recording():[m
+[31m-            return[m
+[31m-        try:[m
+[31m-            self._preview_service.close()[m
+[31m-            self._preview_service.replace_camera(create_preview_camera())[m
+[31m-            self._sync_exposure_controls()[m
+[31m-            self._timer.start()[m
+[31m-        except Exception as exc:[m
+[31m-            logger.exception("Failed to reconnect camera")[m
+[31m-            self._storage_message = f"Failed to reconnect camera: {exc}"[m
+[31m-            self._set_state(CaptureState.ERROR)[m
+[31m-        else:[m
+[31m-            self._set_state(CaptureState.PREVIEW)[m
+[31m-[m
+[31m-    def toggle_pause(self, paused: bool) -> None:[m
+[31m-        if self._state is CaptureState.ERROR or paused == ([m
+[31m-            self._state is CaptureState.PAUSED[m
+[31m-        ):[m
+[31m-            self._set_state(self._state)[m
+[31m-            return[m
+[31m-        try:[m
+[31m-            if paused:[m
+[31m-                if not self._finish_recording():[m
+[31m-                    return[m
+[31m-                self._timer.stop()[m
+[31m-                self._preview_service.stop()[m
+[31m-            else:[m
+[31m-                self._preview_service.start()[m
+[31m-                self._timer.start()[m
+[31m-        except Exception as exc:[m
+[31m-            logger.exception("Failed to change preview pause state")[m
+[31m-            self._storage_message = f"Failed to change preview pause state: {exc}"[m
+[31m-            self._set_state(CaptureState.ERROR)[m
+[31m-        else:[m
+[31m-            self._set_state(CaptureState.PAUSED if paused else CaptureState.PREVIEW)[m
+[31m-[m
+[31m-    def toggle_manual_exposure(self, manual: bool) -> None:[m
+[31m-        if manual:[m
+[31m-            exposure = self._preview_service.get_exposure_ms()[m
+[31m-            self._preview_service.set_auto_exposure(False)[m
+[31m-            if exposure is not None:[m
+[31m-                self._preview_service.set_exposure_ms(exposure)[m
+[31m-                self.exposure_value_changed.emit(exposure)[m
+[31m-        else:[m
+[31m-            self._preview_service.set_auto_exposure(True)[m
+[31m-            self._sync_exposure_controls()[m
+[31m-[m
+[31m-    def change_exposure(self, exposure_ms: float) -> None:[m
+[31m-        self._preview_service.set_exposure_ms(exposure_ms)[m
+[31m-[m
+[31m-    def close(self) -> None:[m
+[31m-        self._timer.stop()[m
+[31m-        try:[m
+[31m-            self._storage.close()[m
+[31m-        finally:[m
+[31m-            self._preview_service.close()[m
+[31m-[m
+[31m-    def _update_frame(self) -> None:[m
+[31m-        if self._state not in (CaptureState.PREVIEW, CaptureState.RECORDING):[m
+[31m-            return[m
+[31m-        try:[m
+[31m-            frame = self._preview_service.next_frame()[m
+[31m-        except CameraError as exc:[m
+[31m-            logger.exception("Camera preview failed")[m
+[31m-            reason = str(exc) if self._state is CaptureState.RECORDING else None[m
+[31m-            if not self._finish_recording(interrupted_reason=reason):[m
+[31m-                return[m
+[31m-            try:[m
+[31m-                self._preview_service.replace_camera([m
+[31m-                    MockCamera(reason=f"Preview failed: {exc}")[m
+[31m-                )[m
+[31m-                self._sync_exposure_controls()[m
+[31m-                frame = self._preview_service.next_frame()[m
+[31m-            except Exception as recovery_exc:[m
+[31m-                logger.exception("Failed to recover camera preview")[m
+[31m-                self._storage_message += ([m
+[31m-                    f". Failed to recover camera preview: {recovery_exc}"[m
+[31m-                )[m
+[31m-                self._set_state(CaptureState.ERROR)[m
+[31m-                return[m
+[31m-[m
+[31m-        self._last_frame = frame[m
+[31m-        if self._state is CaptureState.RECORDING:[m
+[31m-            try:[m
+[31m-                self._storage.write_video_frame(frame)[m
+[31m-            except (RuntimeError, cv2.error) as exc:[m
+[31m-                logger.exception("Video frame recording failed")[m
+[31m-                self._finish_recording(interrupted_reason=str(exc))[m
+[31m-[m
+[31m-        self.frame_ready.emit(frame)[m
+[31m-        self._update_status()[m
+[31m-[m
+[31m-    def _refresh_recent_frames(self) -> None:[m
+[31m-        self.recent_photos_changed.emit(self._storage.list_recent_photo_paths())[m
+[31m-[m
+[31m-    def _finish_recording(self, interrupted_reason: str | None = None) -> bool:[m
+[31m-        try:[m
+[31m-            path = self._storage.stop_video()[m
+[31m-            if path is not None:[m
+[31m-                if interrupted_reason:[m
+[31m-                    self._storage_message = ([m
+[31m-                        f"Recording interrupted: {interrupted_reason}. "[m
+[31m-                        f"Recorded segment saved: {path.name}"[m
+[31m-                    )[m
+[31m-                else:[m
+[31m-                    self._storage_message = f"Видео сохранено: {path.name}"[m
+[31m-            elif interrupted_reason:[m
+[31m-                self._storage_message = f"Recording interrupted: {interrupted_reason}"[m
+[31m-        except Exception as exc:[m
+[31m-            logger.exception("Failed to finish video recording")[m
+[31m-            if interrupted_reason:[m
+[31m-                self._storage_message = ([m
+[31m-                    f"Recording interrupted: {interrupted_reason}. "[m
+[31m-                    f"Failed to save video: {exc}"[m
+[31m-                )[m
+[31m-            else:[m
+[31m-                self._storage_message = f"Failed to save video: {exc}"[m
+[31m-        finally:[m
+[31m-            if self._storage.is_recording:[m
+[31m-                self._set_state(CaptureState.ERROR)[m
+[31m-            elif self._state is CaptureState.RECORDING:[m
+[31m-                self._set_state(CaptureState.PREVIEW)[m
+[31m-            else:[m
+[31m-                self._set_state(self._state)[m
+[31m-        return not self._storage.is_recording[m
+[31m-[m
+[31m-    def _set_state(self, state: CaptureState) -> None:[m
+[31m-        self._state = state[m
+[31m-        if state is CaptureState.ERROR:[m
+[31m-            self._timer.stop()[m
+[31m-            self._last_frame = None[m
+[31m-        self.recording_changed.emit(state is CaptureState.RECORDING)[m
+[31m-        self.paused_changed.emit(state is CaptureState.PAUSED)[m
+[31m-        self._update_status()[m
+[31m-[m
+[31m-    def _update_status(self) -> None:[m
+[31m-        status = self._preview_service.get_status()[m
+[31m-        parts = [[m
+[31m-            "MOCK" if status.is_mock else "REAL",[m
+[31m-            status.camera_name,[m
+[31m-            self._state.name.lower(),[m
+[31m-        ][m
+[31m-        if status.error_message:[m
+[31m-            parts.append(status.error_message)[m
+[31m-        if self._storage_message:[m
+[31m-            parts.append(self._storage_message)[m
+[31m-        self.status_changed.emit(" | ".join(parts))[m
+[31m-[m
+[31m-    def _sync_exposure_controls(self) -> None:[m
+[31m-        self.exposure_range_changed.emit(*self._preview_service.get_exposure_range_ms())[m
+[31m-        exposure = self._preview_service.get_exposure_ms()[m
+[31m-        if exposure is not None:[m
+[31m-            self.exposure_value_changed.emit(exposure)[m
+[1mdiff --git a/capillaroscope_app/ui/main_window.py b/capillaroscope_app/ui/main_window.py[m
+[1mindex 63f9929..f24284d 100644[m
+[1m--- a/capillaroscope_app/ui/main_window.py[m
+[1m+++ b/capillaroscope_app/ui/main_window.py[m
+[36m@@ -5,7 +5,7 @@[m [mfrom PySide6.QtWidgets import ([m
+     QWidget,[m
+ )[m
+ [m
+[31m-from capillaroscope_app.application.camera_controller import CameraController[m
+[32m+[m[32mfrom capillaroscope_app.application.capture_controller import CaptureController[m
+ from capillaroscope_app.ui.widgets.analysis_widget import AnalysisWidget[m
+ from capillaroscope_app.ui.widgets.camera_preview_widget import CameraPreviewWidget[m
+ from capillaroscope_app.ui.widgets.capture_controls_widget import ([m
+[36m@@ -25,7 +25,7 @@[m [mfrom capillaroscope_app.ui.widgets.visit_card_widget import VisitCardWidget[m
+ [m
+ [m
+ class MainWindow(QMainWindow):[m
+[31m-    def __init__(self, camera) -> None:[m
+[32m+[m[32m    def __init__(self, capture_controller: CaptureController) -> None:[m
+         super().__init__()[m
+         self.setWindowTitle("Capillaroscope Preview")[m
+ [m
+[36m@@ -34,40 +34,39 @@[m [mclass MainWindow(QMainWindow):[m
+         self._device = DeviceWidget()[m
+         self._recent_frames = RecentFramesWidget()[m
+         self._status = StatusWidget()[m
+[31m-        self._camera_controller = CameraController(camera, self)[m
+[32m+[m[32m        self._capture_controller = capture_controller[m
+ [m
+         self._connect_controller()[m
+         self._build_layout()[m
+[31m-        self._camera_controller.start()[m
+ [m
+     def _connect_controller(self) -> None:[m
+         self._capture_controls.photo_requested.connect([m
+[31m-            self._camera_controller.take_photo[m
+[32m+[m[32m            self._capture_controller.take_photo[m
+         )[m
+         self._capture_controls.recording_toggled.connect([m
+[31m-            self._camera_controller.set_recording_enabled[m
+[32m+[m[32m            self._capture_controller.set_recording_enabled[m
+         )[m
+[31m-        self._device.reconnect_requested.connect(self._camera_controller.reconnect)[m
+[31m-        self._device.pause_toggled.connect(self._camera_controller.toggle_pause)[m
+[32m+[m[32m        self._device.reconnect_requested.connect(self._capture_controller.reconnect)[m
+[32m+[m[32m        self._device.pause_toggled.connect(self._capture_controller.toggle_pause)[m
+         self._device.manual_exposure_toggled.connect(self._device.set_manual_exposure)[m
+         self._device.manual_exposure_toggled.connect([m
+[31m-            self._camera_controller.toggle_manual_exposure[m
+[32m+[m[32m            self._capture_controller.toggle_manual_exposure[m
+         )[m
+[31m-        self._device.exposure_changed.connect(self._camera_controller.change_exposure)[m
+[32m+[m[32m        self._device.exposure_changed.connect(self._capture_controller.change_exposure)[m
+ [m
+[31m-        self._camera_controller.frame_ready.connect(self._camera_preview.set_frame)[m
+[31m-        self._camera_controller.status_changed.connect(self._status.set_status)[m
+[31m-        self._camera_controller.recent_photos_changed.connect([m
+[32m+[m[32m        self._capture_controller.frame_ready.connect(self._camera_preview.set_frame)[m
+[32m+[m[32m        self._capture_controller.status_changed.connect(self._status.set_status)[m
+[32m+[m[32m        self._capture_controller.recent_photos_changed.connect([m
+             self._recent_frames.set_photos[m
+         )[m
+[31m-        self._camera_controller.recording_changed.connect([m
+[32m+[m[32m        self._capture_controller.recording_changed.connect([m
+             self._capture_controls.set_recording[m
+         )[m
+[31m-        self._camera_controller.paused_changed.connect(self._device.set_paused)[m
+[31m-        self._camera_controller.exposure_range_changed.connect([m
+[32m+[m[32m        self._capture_controller.paused_changed.connect(self._device.set_paused)[m
+[32m+[m[32m        self._capture_controller.exposure_range_changed.connect([m
+             self._device.set_exposure_range[m
+         )[m
+[31m-        self._camera_controller.exposure_value_changed.connect([m
+[32m+[m[32m        self._capture_controller.exposure_value_changed.connect([m
+             self._device.set_exposure_value[m
+         )[m
+ [m
+[36m@@ -126,9 +125,3 @@[m [mclass MainWindow(QMainWindow):[m
+ [m
+         root_layout.addLayout(body_layout, 1)[m
+         self.setCentralWidget(root)[m
+[31m-[m
+[31m-    def closeEvent(self, event) -> None:[m
+[31m-        try:[m
+[31m-            self._camera_controller.close()[m
+[31m-        finally:[m
+[31m-            super().closeEvent(event)[m
+[1mdiff --git a/capillaroscope_app/ui/widgets/recent_frames_widget.py b/capillaroscope_app/ui/widgets/recent_frames_widget.py[m
+[1mindex 64e4cf2..14dd189 100644[m
+[1m--- a/capillaroscope_app/ui/widgets/recent_frames_widget.py[m
+[1m+++ b/capillaroscope_app/ui/widgets/recent_frames_widget.py[m
+[36m@@ -2,7 +2,7 @@[m [mfrom pathlib import Path[m
+ [m
+ from loguru import logger[m
+ from PySide6.QtCore import Qt, QUrl[m
+[31m-from PySide6.QtGui import QDesktopServices, QPixmap[m
+[32m+[m[32mfrom PySide6.QtGui import QDesktopServices, QImage, QPixmap[m
+ from PySide6.QtWidgets import QGridLayout, QGroupBox, QLabel[m
+ [m
+ from capillaroscope_app.ui.styles import PHOTO_LABEL, PHOTO_LABEL_HOVERED[m
+[36m@@ -56,18 +56,13 @@[m [mclass RecentFramesWidget(QGroupBox):[m
+         super().__init__("Последние кадры")[m
+         self._layout = QGridLayout(self)[m
+ [m
+[31m-    def set_photos(self, paths: list[Path]) -> None:[m
+[32m+[m[32m    def set_photos(self, photos: list[tuple[Path, QImage]]) -> None:[m
+         while item := self._layout.takeAt(0):[m
+             if widget := item.widget():[m
+                 widget.deleteLater()[m
+ [m
+[31m-        for index, path in enumerate(paths):[m
+[31m-            pixmap = QPixmap(str(path))[m
+[31m-            if pixmap.isNull():[m
+[31m-                logger.warning("Could not load photo preview: {}", path)[m
+[31m-                continue[m
+[31m-[m
+[32m+[m[32m        for index, (path, image) in enumerate(photos):[m
+             label = PhotoLabel(path)[m
+[31m-            label.set_source_pixmap(pixmap)[m
+[32m+[m[32m            label.set_source_pixmap(QPixmap.fromImage(image))[m
+             self._layout.addWidget(label, index // 4, index % 4)[m
+             logger.debug("Photo preview shown: {}", path)[m

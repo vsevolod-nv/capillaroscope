@@ -2,7 +2,7 @@ from pathlib import Path
 
 from loguru import logger
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices, QPixmap
+from PySide6.QtGui import QDesktopServices, QImage, QPixmap
 from PySide6.QtWidgets import QGridLayout, QGroupBox, QLabel
 
 from capillaroscope_app.ui.styles import PHOTO_LABEL, PHOTO_LABEL_HOVERED
@@ -56,18 +56,13 @@ class RecentFramesWidget(QGroupBox):
         super().__init__("Последние кадры")
         self._layout = QGridLayout(self)
 
-    def set_photos(self, paths: list[Path]) -> None:
+    def set_photos(self, photos: list[tuple[Path, QImage]]) -> None:
         while item := self._layout.takeAt(0):
             if widget := item.widget():
                 widget.deleteLater()
 
-        for index, path in enumerate(paths):
-            pixmap = QPixmap(str(path))
-            if pixmap.isNull():
-                logger.warning("Could not load photo preview: {}", path)
-                continue
-
+        for index, (path, image) in enumerate(photos):
             label = PhotoLabel(path)
-            label.set_source_pixmap(pixmap)
+            label.set_source_pixmap(QPixmap.fromImage(image))
             self._layout.addWidget(label, index // 4, index % 4)
             logger.debug("Photo preview shown: {}", path)

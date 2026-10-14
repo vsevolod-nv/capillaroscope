@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from capillaroscope_app.application.camera_controller import CameraController
+from capillaroscope_app.application.capture_controller import CaptureController
 from capillaroscope_app.ui.widgets.analysis_widget import AnalysisWidget
 from capillaroscope_app.ui.widgets.camera_preview_widget import CameraPreviewWidget
 from capillaroscope_app.ui.widgets.capture_controls_widget import (
@@ -25,7 +25,7 @@ from capillaroscope_app.ui.widgets.visit_card_widget import VisitCardWidget
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, camera) -> None:
+    def __init__(self, capture_controller: CaptureController) -> None:
         super().__init__()
         self.setWindowTitle("Capillaroscope Preview")
 
@@ -34,40 +34,39 @@ class MainWindow(QMainWindow):
         self._device = DeviceWidget()
         self._recent_frames = RecentFramesWidget()
         self._status = StatusWidget()
-        self._camera_controller = CameraController(camera, self)
+        self._capture_controller = capture_controller
 
         self._connect_controller()
         self._build_layout()
-        self._camera_controller.start()
 
     def _connect_controller(self) -> None:
         self._capture_controls.photo_requested.connect(
-            self._camera_controller.take_photo
+            self._capture_controller.take_photo
         )
         self._capture_controls.recording_toggled.connect(
-            self._camera_controller.set_recording_enabled
+            self._capture_controller.set_recording_enabled
         )
-        self._device.reconnect_requested.connect(self._camera_controller.reconnect)
-        self._device.pause_toggled.connect(self._camera_controller.toggle_pause)
+        self._device.reconnect_requested.connect(self._capture_controller.reconnect)
+        self._device.pause_toggled.connect(self._capture_controller.toggle_pause)
         self._device.manual_exposure_toggled.connect(self._device.set_manual_exposure)
         self._device.manual_exposure_toggled.connect(
-            self._camera_controller.toggle_manual_exposure
+            self._capture_controller.toggle_manual_exposure
         )
-        self._device.exposure_changed.connect(self._camera_controller.change_exposure)
+        self._device.exposure_changed.connect(self._capture_controller.change_exposure)
 
-        self._camera_controller.frame_ready.connect(self._camera_preview.set_frame)
-        self._camera_controller.status_changed.connect(self._status.set_status)
-        self._camera_controller.recent_photos_changed.connect(
+        self._capture_controller.frame_ready.connect(self._camera_preview.set_frame)
+        self._capture_controller.status_changed.connect(self._status.set_status)
+        self._capture_controller.recent_photos_changed.connect(
             self._recent_frames.set_photos
         )
-        self._camera_controller.recording_changed.connect(
+        self._capture_controller.recording_changed.connect(
             self._capture_controls.set_recording
         )
-        self._camera_controller.paused_changed.connect(self._device.set_paused)
-        self._camera_controller.exposure_range_changed.connect(
+        self._capture_controller.paused_changed.connect(self._device.set_paused)
+        self._capture_controller.exposure_range_changed.connect(
             self._device.set_exposure_range
         )
-        self._camera_controller.exposure_value_changed.connect(
+        self._capture_controller.exposure_value_changed.connect(
             self._device.set_exposure_value
         )
 
@@ -126,9 +125,3 @@ class MainWindow(QMainWindow):
 
         root_layout.addLayout(body_layout, 1)
         self.setCentralWidget(root)
-
-    def closeEvent(self, event) -> None:
-        try:
-            self._camera_controller.close()
-        finally:
-            super().closeEvent(event)
