@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum, auto
+from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal, Slot
 
@@ -195,13 +196,13 @@ class CaptureController(QObject):
         self.recent_photos_changed.emit(photos)
 
     @Slot(object)
-    def on_photo_saved(self, path: object) -> None:
+    def on_photo_saved(self, path: Path) -> None:
         self._storage_message = f"Photo saved: {path.name}"
         self.recent_photos_requested.emit()
         self._update_status()
 
     @Slot(object)
-    def on_video_started(self, path: object) -> None:
+    def on_video_started(self, path: Path) -> None:
         self._recording_start_pending = False
         self._dropped_video_frames = 0
         self._storage_message = f"Recording video: {path.name}"
@@ -214,7 +215,7 @@ class CaptureController(QObject):
         self._maybe_request_video_stop()
 
     @Slot(object)
-    def on_video_stopped(self, path: object) -> None:
+    def on_video_stopped(self, path: Path | None) -> None:
         dropped = self._dropped_video_frames
         self._reset_recording_flags()
         if path is not None:

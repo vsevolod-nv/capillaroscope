@@ -4,6 +4,7 @@ from loguru import logger
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 from PySide6.QtGui import QImage
 
+from capillaroscope_app.domain.models import Frame
 from capillaroscope_app.storage.media_storage import MediaStorage
 
 
@@ -33,7 +34,7 @@ class StorageWorker(QObject):
         self.ready.emit()
 
     @Slot(object)
-    def save_photo(self, frame: object) -> None:
+    def save_photo(self, frame: Frame) -> None:
         if self._storage is None:
             self.operation_failed.emit("save_photo", "Storage is not ready")
             return
@@ -72,7 +73,7 @@ class StorageWorker(QObject):
         self.recent_photos_loaded.emit(photos)
 
     @Slot(object)
-    def start_video(self, frame: object) -> None:
+    def start_video(self, frame: Frame) -> None:
         if self._storage is None:
             self.operation_failed.emit("start_video", "Storage is not ready")
             return
@@ -85,7 +86,7 @@ class StorageWorker(QObject):
         self.video_started.emit(path)
 
     @Slot(object)
-    def write_video_frame(self, frame: object) -> None:
+    def write_video_frame(self, frame: Frame) -> None:
         if self._storage is None:
             self.operation_failed.emit("write_video", "Storage is not ready")
             return
